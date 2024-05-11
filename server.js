@@ -3,26 +3,38 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const AWS = require('aws-sdk');
 const eventRoutes = require('./routes/events');
+const multer = require('multer');
 
 const app = express();
+// Set up multer to store files in memory
+const upload = multer({ storage: multer.memoryStorage() });
 
 app.use(express.json());
-app.use(cors());
+//making the app use cors as * to allow all origins
+app.use(cors(
+  {
+    origin: '*',
+  },
+));
 
-mongoose.connect('mongodb://localhost:27017/media-manager', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-});
-const db = mongoose.connection;
-db.on('error', console.error.bind(console, 'MongoDB connection error:'));
-db.once('open', () => {
-  console.log('Connected to MongoDB');
 
-});
+// mongoose.connect('mongodb://localhost:27017/media-manager', {
+//   useNewUrlParser: true,
+//   useUnifiedTopology: true,
+// });
+// const db = mongoose.connection;
+// db.on('error', console.error.bind(console, 'MongoDB connection error:'));
+// db.once('open', () => {
+//   console.log('Connected to MongoDB');
 
+// });
+
+app.use('/api/events', eventRoutes);
+
+const region = 'eu-north-1';
+const bucketName = 'myfyps';
 
 const awsConfig = {
-  region: 'eu-north-1',
   accessKeyId: 'AKIA3X5Z3MF7QFJL2XSK',
   secretAccessKey: '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',
 };
@@ -32,38 +44,38 @@ AWS.config.update(awsConfig);
 
 const s3 = new AWS.S3({ apiVersion: '2006-03-01' });
 
-async function uploadFileToS3(file, bucket) {
-  const { originalname, buffer, mimetype } = file;
-  console.log('Bucket Name:', bucket);
+async function uploadFile(file) {
+  const { originalname, mimetype, buffer } = file;
+  console.log(bucketName);
+
+  return await s3_upload(buffer, bucketName, originalname, mimetype);
+}
+
+async function s3_upload(file, bucket, name, mimetype) {
   const params = {
     Bucket: bucket,
-    Key: originalname,
-    Body: buffer,
+    Key: String(name),
+    Body: file,
     ACL: 'public-read',
     ContentType: mimetype,
     ContentDisposition: 'inline',
+    CreateBucketConfiguration: {
+      LocationConstraint: region,
+    },
   };
 
   try {
-    const s3Response = await s3.upload(params).promise();
-    console.log('File uploaded successfully:', s3Response.Location);
+    let s3Response = await s3.upload(params).promise();
     return s3Response;
-  } catch (error) {
-    console.log('Error uploading file:', error);
-    throw error;
+  } catch (e) {
+    console.log(e);
   }
 }
 
-const bucketName = 'myfyps';
-console.log('Bucket Name:', bucketName);
 
-
-app.use('/api/events', eventRoutes);
-
-
-app.post('/api/upload', async (req, res) => {
+app.post('/api/upload', upload.single('file'), async (req, res) => {
   try {
-    const uploadedFile = await uploadFileToS3(req.file, bucketName);
+    const uploadedFile = await uploadFile(req.file);
     res.status(200).json({ message: 'File uploaded successfully', file: uploadedFile });
   } catch (error) {
     console.error('Error uploading file:', error);
