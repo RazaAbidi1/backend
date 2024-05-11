@@ -46,7 +46,7 @@ const s3 = new AWS.S3({ apiVersion: '2006-03-01' });
 
 async function uploadFile(file) {
   const { originalname, mimetype, buffer } = file;
-  console.log(bucketName);
+  console.log('Uploading file:', originalname, mimetype, buffer, bucketName);
 
   return await s3_upload(buffer, bucketName, originalname, mimetype);
 }
@@ -56,7 +56,6 @@ async function s3_upload(file, bucket, name, mimetype) {
     Bucket: bucket,
     Key: String(name),
     Body: file,
-    ACL: 'public-read',
     ContentType: mimetype,
     ContentDisposition: 'inline',
     CreateBucketConfiguration: {
